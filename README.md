@@ -27,10 +27,51 @@ A married couple shares a single **household** account. Each spouse logs the day
 
 MarqIt stores sensitive reproductive-health data. Supabase Row-Level Security restricts each member to their own household's data, and auth tokens are kept in secure device storage.
 
+## Development
+
+Requires Node 18+ and the Expo tooling (installed via `npx`).
+
+```bash
+npm install        # install dependencies
+npm start          # start the Metro dev server (press i / a / w for iOS / Android / web)
+npm run ios        # start + open iOS simulator
+npm run android    # start + open Android emulator
+npm test           # run the Jest test suite
+npm run typecheck  # tsc --noEmit
+npm run lint       # ESLint (expo lint)
+npm run format     # Prettier --write
+```
+
+### Stack & conventions
+
+- **Expo Router** (file-based routing) with **typed routes**. Routes live in `src/app/`.
+- **NativeWind** (Tailwind) for styling — utility classes via `className`. Tokens in `tailwind.config.js` and `src/constants/theme.ts`.
+- **Jest** + **@testing-library/react-native** for tests.
+- Path alias: `@/*` → `src/*`.
+
+### Layout
+
+```
+src/
+  app/                 # Expo Router routes
+    _layout.tsx        # root: providers + route groups
+    (auth)/            # sign-in / sign-up           (unauthenticated)
+    (app)/             # Home / Settings / Charting  (authenticated, gated)
+  components/          # reusable UI (Screen, ActionButtons, …)
+  hooks/               # shared hooks
+  lib/                 # non-UI logic (auth stub today; Supabase client → MI-8)
+  constants/           # design tokens / enums
+  types/               # shared types
+```
+
+The auth gate (`src/lib/auth.ts`) is a **stub** that always reports an authenticated
+session, so the shell is navigable today. Real auth arrives in MI-13.
+
 ## Project management
 
 Work is tracked in TireTrack under project **MarqIt** (`MI`). See [`CLAUDE.md`](./CLAUDE.md) for the working spec.
 
 ## Status
 
-Pre-implementation — the Expo app has not been scaffolded yet.
+App shell scaffolded (MI-7): Expo Router navigation, NativeWind, placeholder
+screens, and tests. No backend yet — Supabase wiring is MI-8.

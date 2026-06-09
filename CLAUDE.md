@@ -4,7 +4,8 @@
 - AWS account profile: N/A (Supabase project — no AWS dependency; grind AWS credential steps do not apply)
 - Project Ticket Location: TireTrack MI
 - Deploy Monitoring: N/A (EAS, no CI deploy workflow yet — see MI-26)
-- Local Testing notes: `npx expo start`; press `i` for iOS simulator / `a` for Android. Supabase URL + anon key live in `.env` as `EXPO_PUBLIC_*` vars. App not yet scaffolded — see MI-7.
+- Local Testing notes: `npx expo start`; press `i` for iOS simulator / `a` for Android. Supabase URL + anon key live in `.env` as `EXPO_PUBLIC_*` vars.
+  - **Automated UI testing (Maestro MCP):** the app is a managed Expo project (no `ios/`/`android/` committed). To drive it on an iOS simulator: (1) ensure an iOS runtime is installed — `xcodebuild -downloadPlatform iOS` if `xcrun simctl list runtimes` is empty; (2) boot a sim (`xcrun simctl boot "iPhone 17 Pro"`, then `open -a Simulator`); (3) build & install with `npx expo run:ios` — this prebuilds, runs `pod install`, compiles, installs, and starts Metro (leave it running). The app's `appId` is `com.jlippincott.marq-it`. Then use the Maestro MCP: `list_devices` → `inspect_screen` → `run`. iOS has no hardware back — tap the header back button (`id: "BackButton"`), not Maestro's `- back`. A passing Home→Charting→Settings smoke flow exists in the MI-7 work.
 
 A mobile app (iOS + Android) that serves as a charting tool for families using the **Marquette Method** of natural family planning.
 
@@ -50,4 +51,4 @@ Work is tracked in **TireTrack**, project **MarqIt** (key `MI`). Epics MI-1–MI
 
 ## Status
 
-Pre-implementation. Tickets and this document exist; the Expo app has not been scaffolded yet (see MI-7).
+App shell scaffolded (MI-7 complete): Expo Router (file-based, typed routes), NativeWind styling, placeholder screens for Auth/Home/Settings/Charting behind a stubbed auth gate, ESLint/Prettier, and Jest + @testing-library/react-native. No backend yet — Supabase client/env is MI-8, schema MI-9, RLS MI-10. See `README.md` for dev commands and folder layout.
