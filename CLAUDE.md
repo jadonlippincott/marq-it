@@ -1,5 +1,11 @@
 # MarqIt
 
+## Repository Details
+- AWS account profile: N/A (Supabase project — no AWS dependency; grind AWS credential steps do not apply)
+- Project Ticket Location: TireTrack MI
+- Deploy Monitoring: N/A (EAS, no CI deploy workflow yet — see MI-26)
+- Local Testing notes: `npx expo start`; press `i` for iOS simulator / `a` for Android. Supabase URL + anon key live in `.env` as `EXPO_PUBLIC_*` vars. App not yet scaffolded — see MI-7.
+
 A mobile app (iOS + Android) that serves as a charting tool for families using the **Marquette Method** of natural family planning.
 
 ## What the app does
