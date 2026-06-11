@@ -195,7 +195,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      create_household_with_member: {
+        Args: {
+          p_display_name: string
+          p_role: Database["public"]["Enums"]["member_role"]
+        }
+        Returns: string
+      }
     }
     Enums: {
       member_role: "wife" | "husband"
