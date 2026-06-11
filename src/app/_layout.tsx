@@ -5,23 +5,27 @@ import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import { AuthProvider } from "@/lib/auth";
+
 /**
  * Root layout. Hosts the two route groups:
- *   (auth) — sign-in / sign-up   (unauthenticated)
+ *   (auth) — sign-in / sign-up / join   (unauthenticated)
  *   (app)  — Home / Settings / Charting (authenticated)
  *
- * The auth gate that chooses between them lives in (app)/_layout.tsx, backed by
- * the useAuth() stub (MI-7). Real redirection logic arrives with MI-13.
+ * AuthProvider supplies the real Supabase session (MI-13); each group's
+ * _layout redirects based on it.
  */
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <StatusBar style="auto" />
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(app)" />
-          <Stack.Screen name="(auth)" />
-        </Stack>
+        <AuthProvider>
+          <StatusBar style="auto" />
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="(app)" />
+            <Stack.Screen name="(auth)" />
+          </Stack>
+        </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 
+import { useAuth } from "@/lib/auth";
 import { Screen } from "@/components/screen";
 import { createHouseholdInvite } from "@/lib/join";
 
@@ -8,11 +9,11 @@ import { createHouseholdInvite } from "@/lib/join";
  * Settings — reset-time picker (MI-17), day-boundary logic (MI-18), and
  * protocol selection (MI-19) are still TODO (Settings epic, MI-4).
  *
- * MI-12 adds a minimal "Invite your spouse" action here so member #1 can mint
- * an invite code. (Placement/polish will be revisited with the Settings epic
- * and real auth/session in MI-13.)
+ * Hosts the "Invite your spouse" action (MI-12) and Sign out (MI-13). Polished
+ * layout comes with the Settings epic.
  */
 export default function SettingsScreen() {
+  const { signOut } = useAuth();
   const [code, setCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -87,6 +88,15 @@ export default function SettingsScreen() {
             )}
           </Pressable>
         </View>
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Sign out"
+          onPress={() => signOut()}
+          className="mt-auto min-h-12 items-center justify-center rounded-2xl border border-gray-300 px-4 py-3 active:bg-gray-100"
+        >
+          <Text className="text-base font-semibold text-red-600">Sign out</Text>
+        </Pressable>
       </View>
     </Screen>
   );
