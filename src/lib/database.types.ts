@@ -69,6 +69,61 @@ export type Database = {
           },
         ]
       }
+      household_invites: {
+        Row: {
+          code: string
+          created_at: string
+          created_by: string | null
+          expires_at: string
+          household_id: string
+          redeemed_at: string | null
+          redeemed_by: string | null
+          role: Database["public"]["Enums"]["member_role"]
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          created_by?: string | null
+          expires_at: string
+          household_id: string
+          redeemed_at?: string | null
+          redeemed_by?: string | null
+          role: Database["public"]["Enums"]["member_role"]
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string
+          household_id?: string
+          redeemed_at?: string | null
+          redeemed_by?: string | null
+          role?: Database["public"]["Enums"]["member_role"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "household_invites_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "household_invites_household_id_fkey"
+            columns: ["household_id"]
+            isOneToOne: false
+            referencedRelation: "households"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "household_invites_redeemed_by_fkey"
+            columns: ["redeemed_by"]
+            isOneToOne: false
+            referencedRelation: "members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       households: {
         Row: {
           created_at: string
@@ -195,11 +250,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_household_invite: { Args: Record<PropertyKey, never>; Returns: string }
       create_household_with_member: {
         Args: {
           p_display_name: string
           p_role: Database["public"]["Enums"]["member_role"]
         }
+        Returns: string
+      }
+      redeem_household_invite: {
+        Args: { p_code: string; p_display_name: string }
         Returns: string
       }
     }
