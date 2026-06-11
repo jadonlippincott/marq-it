@@ -16,6 +16,9 @@ export default function SignInScreen() {
         <Link href="/(auth)/sign-up" className="text-center text-base text-blue-600">
           Create an account →
         </Link>
+        <Link href="/(auth)/join" className="text-center text-base text-blue-600">
+          Join your spouse&apos;s household →
+        </Link>
       </View>
     </Screen>
   );
