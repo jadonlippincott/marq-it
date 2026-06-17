@@ -3,14 +3,14 @@ import { Pressable, Text, View } from "react-native";
 /**
  * The four primary Home actions: Low / High / Peak / Intercourse.
  *
- * Color-coded by meaning (MI-14): Low/High/Peak use the reading palette
- * (green/amber/red), Intercourse is a distinct blue. Large tap targets, 2×2
- * grid. The component stays presentational — `onPress` is wired with real
- * behavior later (the once-per-day shared lock is MI-15; Intercourse
- * multi-press is MI-16) and it's reused/unit-tested in isolation.
+ * Color-coded by meaning (MI-14). The once-per-day shared lock (MI-15) is driven
+ * by `lockedReading`: when set, the three readings become non-interactive — the
+ * chosen one stays highlighted with a "Recorded" caption, the others dim.
+ * Intercourse is always available (its multi-press behavior is MI-16).
  */
 export const ACTIONS = ["Low", "High", "Peak", "Intercourse"] as const;
 export type Action = (typeof ACTIONS)[number];
+export type ReadingLabel = "Low" | "High" | "Peak";
 
 const ACTION_STYLES: Record<Action, { container: string; label: string }> = {
   Low: { container: "bg-reading-low", label: "text-white" },
@@ -19,20 +19,43 @@ const ACTION_STYLES: Record<Action, { container: string; label: string }> = {
   Intercourse: { container: "bg-blue-600", label: "text-white" },
 };
 
-export function ActionButtons({ onPress }: { onPress?: (action: Action) => void }) {
+const READING_ACTIONS: Action[] = ["Low", "High", "Peak"];
+
+export function ActionButtons({
+  onPress,
+  lockedReading,
+}: {
+  onPress?: (action: Action) => void;
+  /** The recorded reading for today, or null/undefined if unlocked. */
+  lockedReading?: ReadingLabel | null;
+}) {
   return (
     <View className="flex-row flex-wrap justify-between gap-3" accessibilityRole="menu">
       {ACTIONS.map((action) => {
         const style = ACTION_STYLES[action];
+        const isReading = READING_ACTIONS.includes(action);
+        const locked = isReading && lockedReading != null;
+        const isChosen = action === lockedReading;
+        // Locked readings are non-interactive; Intercourse always taps.
+        const disabled = locked;
+        const dimmed = locked && !isChosen;
+
         return (
           <Pressable
             key={action}
             accessibilityRole="button"
             accessibilityLabel={action}
+            accessibilityState={{ disabled, selected: isChosen }}
+            disabled={disabled}
             onPress={() => onPress?.(action)}
-            className={`min-h-28 w-[48%] items-center justify-center rounded-3xl active:opacity-80 ${style.container}`}
+            className={`min-h-28 w-[48%] items-center justify-center rounded-3xl active:opacity-80 ${
+              style.container
+            } ${dimmed ? "opacity-40" : ""}`}
           >
             <Text className={`text-xl font-bold ${style.label}`}>{action}</Text>
+            {isChosen ? (
+              <Text className={`mt-1 text-xs font-medium ${style.label}`}>Recorded</Text>
+            ) : null}
           </Pressable>
         );
       })}
