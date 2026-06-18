@@ -52,3 +52,13 @@ export function buildDayCards({
     isToday: chartDate === today,
   }));
 }
+
+/** Index of the card for `chartDate`, or -1 if it's outside the window. */
+export function indexOfChartDate(cards: DayCard[], chartDate: string): number {
+  return cards.findIndex((c) => c.chartDate === chartDate);
+}
+
+/** Whether a card has anything worth marking on the calendar (reading or intercourse). */
+export function hasActivity(card: DayCard): boolean {
+  return card.reading !== null || card.intercourseCount > 0;
+}
