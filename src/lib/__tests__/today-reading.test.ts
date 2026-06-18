@@ -15,8 +15,11 @@ const state: TodayState = {
   householdId: "hh-1",
   memberId: "m-1",
   chartDate: "2024-06-10",
+  resetTime: "04:00:00",
+  timeZone: "UTC",
   reading: null,
   recordedByName: null,
+  intercourseCount: 0,
 };
 
 beforeEach(() => mockFrom.mockReset());

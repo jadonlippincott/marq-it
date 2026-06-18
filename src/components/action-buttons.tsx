@@ -6,7 +6,8 @@ import { Pressable, Text, View } from "react-native";
  * Color-coded by meaning (MI-14). The once-per-day shared lock (MI-15) is driven
  * by `lockedReading`: when set, the three readings become non-interactive — the
  * chosen one stays highlighted with a "Recorded" caption, the others dim.
- * Intercourse is always available (its multi-press behavior is MI-16).
+ * Intercourse is always available and accumulates (MI-16): each tap fires
+ * `onPress` and `intercourseCount` shows today's running tally.
  */
 export const ACTIONS = ["Low", "High", "Peak", "Intercourse"] as const;
 export type Action = (typeof ACTIONS)[number];
@@ -24,10 +25,13 @@ const READING_ACTIONS: Action[] = ["Low", "High", "Peak"];
 export function ActionButtons({
   onPress,
   lockedReading,
+  intercourseCount = 0,
 }: {
   onPress?: (action: Action) => void;
   /** The recorded reading for today, or null/undefined if unlocked. */
   lockedReading?: ReadingLabel | null;
+  /** Intercourse events recorded so far today; shown as a tally (MI-16). */
+  intercourseCount?: number;
 }) {
   return (
     <View className="flex-row flex-wrap justify-between gap-3" accessibilityRole="menu">
@@ -55,6 +59,11 @@ export function ActionButtons({
             <Text className={`text-xl font-bold ${style.label}`}>{action}</Text>
             {isChosen ? (
               <Text className={`mt-1 text-xs font-medium ${style.label}`}>Recorded</Text>
+            ) : null}
+            {action === "Intercourse" && intercourseCount > 0 ? (
+              <Text className={`mt-1 text-xs font-medium ${style.label}`}>
+                {intercourseCount} today
+              </Text>
             ) : null}
           </Pressable>
         );
