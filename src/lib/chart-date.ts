@@ -48,3 +48,29 @@ function parseTimeToSeconds(time: string): number {
 function pad(value: number, length: number): string {
   return String(value).padStart(length, "0");
 }
+
+/** Shift a `YYYY-MM-DD` chart date by `days` (negative = earlier). DST-safe (UTC math). */
+export function addChartDays(date: string, days: number): string {
+  const [y, m, d] = date.split("-").map(Number);
+  const shifted = new Date(Date.UTC(y, m - 1, d));
+  shifted.setUTCDate(shifted.getUTCDate() + days);
+  return `${pad(shifted.getUTCFullYear(), 4)}-${pad(shifted.getUTCMonth() + 1, 2)}-${pad(
+    shifted.getUTCDate(),
+    2,
+  )}`;
+}
+
+/**
+ * Inclusive ascending list of chart dates from `start` to `end` (both
+ * `YYYY-MM-DD`). Returns `[]` if `start` is after `end`. Used to build a
+ * contiguous day-cards column (MI-21), including days with no entry.
+ */
+export function enumerateChartDates(start: string, end: string): string[] {
+  const dates: string[] = [];
+  let cursor = start;
+  while (cursor <= end) {
+    dates.push(cursor);
+    cursor = addChartDays(cursor, 1);
+  }
+  return dates;
+}

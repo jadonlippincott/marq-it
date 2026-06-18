@@ -18,15 +18,26 @@ export const PROTOCOL_META: Record<Protocol, { label: string; supported: boolean
 
 export function ProtocolView({
   protocol,
+  today,
   entries,
+  intercourseByDate,
   isEmpty,
 }: {
   protocol: Protocol;
+  today: string;
   entries: ChartEntry[];
+  intercourseByDate: Record<string, number>;
   isEmpty: boolean;
 }) {
   if (protocol === "nursing_mother") {
-    return <NursingMotherChart entries={entries} isEmpty={isEmpty} />;
+    return (
+      <NursingMotherChart
+        today={today}
+        entries={entries}
+        intercourseByDate={intercourseByDate}
+        isEmpty={isEmpty}
+      />
+    );
   }
 
   return (
