@@ -8,16 +8,22 @@ import { readingToLabel } from "@/lib/today-reading";
 
 /**
  * Home — the landing hub (MI-14) with the once-per-day shared reading lock
- * (MI-15). Tapping Low/High/Peak records today's reading and locks all three
- * for both spouses (synced via Realtime) until the next reset time. Editing is
- * on the Charting page (MI-23) — Home is record-only. Intercourse is MI-16.
+ * (MI-15) and the unrestricted intercourse tally (MI-16). Tapping Low/High/Peak
+ * records today's reading and locks all three for both spouses (synced via
+ * Realtime) until the next reset time; tapping Intercourse records an event and
+ * bumps today's count, with no limit. Editing is on the Charting page (MI-23) —
+ * Home is record-only.
  */
 export default function HomeScreen() {
-  const { loading, reading, recordedByName, record } = useTodayReading();
+  const { loading, reading, recordedByName, intercourseCount, record, recordIntercourse } =
+    useTodayReading();
   const lockedReading = reading ? readingToLabel(reading) : null;
 
   function onAction(action: Action) {
-    if (action === "Intercourse") return; // MI-16
+    if (action === "Intercourse") {
+      recordIntercourse();
+      return;
+    }
     record(action); // narrowed to Low | High | Peak
   }
 
@@ -37,7 +43,11 @@ export default function HomeScreen() {
           </View>
         ) : (
           <View className="gap-3">
-            <ActionButtons onPress={onAction} lockedReading={lockedReading} />
+            <ActionButtons
+              onPress={onAction}
+              lockedReading={lockedReading}
+              intercourseCount={intercourseCount}
+            />
             <Text className="text-center text-sm text-gray-500">
               {lockedReading
                 ? `Today's reading is ${lockedReading}${

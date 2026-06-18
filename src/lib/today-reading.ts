@@ -1,5 +1,6 @@
 import { chartDateFor } from "@/lib/chart-date";
 import type { Database } from "@/lib/database.types";
+import { countTodayIntercourse } from "@/lib/intercourse";
 import { supabase } from "@/lib/supabase";
 
 /**
@@ -31,10 +32,15 @@ export type TodayState = {
   householdId: string;
   memberId: string;
   chartDate: string;
+  /** Household reset time + timezone, carried so callers can re-count by day. */
+  resetTime: string;
+  timeZone: string;
   /** Today's recorded reading, or null if not yet recorded (unlocked). */
   reading: Reading | null;
   /** Display name of whoever recorded today's reading, if locked. */
   recordedByName: string | null;
+  /** Number of intercourse events recorded so far today (MI-16). */
+  intercourseCount: number;
 };
 
 /**
@@ -65,12 +71,15 @@ export async function loadTodayState(
   const timeZone = settingsResult.data?.timezone ?? "UTC";
   const chartDate = chartDateFor(now, resetTime, timeZone);
 
-  const { data: entry } = await supabase
-    .from("day_entries")
-    .select("reading, recorded_by")
-    .eq("household_id", member.household_id)
-    .eq("chart_date", chartDate)
-    .maybeSingle();
+  const [{ data: entry }, intercourseCount] = await Promise.all([
+    supabase
+      .from("day_entries")
+      .select("reading, recorded_by")
+      .eq("household_id", member.household_id)
+      .eq("chart_date", chartDate)
+      .maybeSingle(),
+    countTodayIntercourse(member.household_id, chartDate, resetTime, timeZone, now),
+  ]);
 
   const namesById = new Map((membersResult.data ?? []).map((m) => [m.id, m.display_name]));
 
@@ -78,8 +87,11 @@ export async function loadTodayState(
     householdId: member.household_id,
     memberId: member.id,
     chartDate,
+    resetTime,
+    timeZone,
     reading: entry?.reading ?? null,
     recordedByName: entry?.recorded_by ? (namesById.get(entry.recorded_by) ?? null) : null,
+    intercourseCount,
   };
 }
 
