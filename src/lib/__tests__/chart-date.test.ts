@@ -1,4 +1,4 @@
-import { chartDateFor } from "@/lib/chart-date";
+import { addChartDays, chartDateFor, enumerateChartDates } from "@/lib/chart-date";
 
 describe("chartDateFor", () => {
   const RESET = "04:00:00";
@@ -33,5 +33,44 @@ describe("chartDateFor", () => {
 
   it("rolls back across a year boundary", () => {
     expect(chartDateFor(new Date("2025-01-01T02:00:00Z"), RESET, "UTC")).toBe("2024-12-31");
+  });
+});
+
+describe("addChartDays", () => {
+  it("shifts forward and backward", () => {
+    expect(addChartDays("2024-06-10", 1)).toBe("2024-06-11");
+    expect(addChartDays("2024-06-10", -1)).toBe("2024-06-09");
+  });
+
+  it("crosses month and year boundaries", () => {
+    expect(addChartDays("2024-06-30", 1)).toBe("2024-07-01");
+    expect(addChartDays("2025-01-01", -1)).toBe("2024-12-31");
+  });
+});
+
+describe("enumerateChartDates", () => {
+  it("returns an inclusive ascending range", () => {
+    expect(enumerateChartDates("2024-06-08", "2024-06-11")).toEqual([
+      "2024-06-08",
+      "2024-06-09",
+      "2024-06-10",
+      "2024-06-11",
+    ]);
+  });
+
+  it("returns a single date when start equals end", () => {
+    expect(enumerateChartDates("2024-06-10", "2024-06-10")).toEqual(["2024-06-10"]);
+  });
+
+  it("returns empty when start is after end", () => {
+    expect(enumerateChartDates("2024-06-11", "2024-06-10")).toEqual([]);
+  });
+
+  it("spans a month boundary", () => {
+    expect(enumerateChartDates("2024-06-29", "2024-07-01")).toEqual([
+      "2024-06-29",
+      "2024-06-30",
+      "2024-07-01",
+    ]);
   });
 });

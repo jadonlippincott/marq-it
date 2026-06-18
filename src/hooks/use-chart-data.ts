@@ -35,6 +35,8 @@ export function useChartData() {
     hasHousehold: data !== null,
     protocol: data?.protocol ?? null,
     entries: data?.entries ?? [],
+    intercourseByDate: data?.intercourseByDate ?? {},
+    today: data?.today ?? null,
     isEmpty: data?.isEmpty ?? true,
   };
 }

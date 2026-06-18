@@ -1,19 +1,25 @@
 import { Text, View } from "react-native";
 
+import { DayCardsColumn } from "@/components/charting/day-cards-column";
 import type { ChartEntry } from "@/lib/chart-data";
+import { buildDayCards } from "@/lib/day-cards";
 
 /**
- * Nursing Mother (10-day) chart view — scaffold (MI-20).
+ * Nursing Mother (10-day) chart view (MI-20 scaffold, MI-21 day-cards column).
  *
- * Renders the chart container and an empty state. The scrollable day-cards
- * column lands in MI-21 (it will consume `entries`), the calendar mini-view
- * header in MI-22, and per-card editing in MI-23 — all mount inside this view.
+ * Renders the scrollable day-cards column (one card per charting day, opening on
+ * today) or an empty state before any reading is recorded. The calendar mini-view
+ * header (MI-22) and per-card editing (MI-23) mount inside this view next.
  */
 export function NursingMotherChart({
+  today,
   entries,
+  intercourseByDate,
   isEmpty,
 }: {
+  today: string;
   entries: ChartEntry[];
+  intercourseByDate: Record<string, number>;
   isEmpty: boolean;
 }) {
   if (isEmpty) {
@@ -27,15 +33,15 @@ export function NursingMotherChart({
     );
   }
 
+  const cards = buildDayCards({ today, entries, intercourseByDate });
+
   return (
     <View testID="nursing-mother-chart" className="flex-1 gap-2">
       <Text className="text-sm font-medium uppercase tracking-widest text-gray-400">
         Nursing Mother
       </Text>
-      {/* Day-cards column renders here (MI-21); calendar header above (MI-22). */}
-      <Text className="text-sm text-gray-500">
-        {entries.length} {entries.length === 1 ? "day" : "days"} charted.
-      </Text>
+      {/* Calendar mini-view header mounts above the column in MI-22. */}
+      <DayCardsColumn cards={cards} />
     </View>
   );
 }
