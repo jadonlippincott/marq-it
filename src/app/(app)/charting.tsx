@@ -9,12 +9,23 @@ import { useChartData } from "@/hooks/use-chart-data";
  *
  * Loads the household's chart data and routes to the view for the selected
  * protocol (only Nursing Mother is implemented), which renders the scrollable
- * day-cards column (MI-21). The calendar header (MI-22), editing (MI-23), and
- * Realtime sync (MI-24) build on top of this.
+ * day-cards column (MI-21) + calendar header (MI-22) and supports per-day edits
+ * (MI-23). Realtime sync (MI-24) builds on top of this.
  */
 export default function ChartingScreen() {
-  const { loading, hasHousehold, protocol, today, entries, intercourseByDate, isEmpty } =
-    useChartData();
+  const {
+    loading,
+    householdId,
+    memberId,
+    protocol,
+    resetTime,
+    timeZone,
+    today,
+    entries,
+    intercourseByDate,
+    isEmpty,
+    refresh,
+  } = useChartData();
 
   return (
     <Screen>
@@ -22,7 +33,7 @@ export default function ChartingScreen() {
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator />
         </View>
-      ) : !hasHousehold || !protocol || !today ? (
+      ) : !protocol || !today || !householdId || !memberId || !resetTime || !timeZone ? (
         <View className="flex-1 items-center justify-center gap-2">
           <Text className="text-lg font-semibold text-gray-900">Charting</Text>
           <Text className="px-8 text-center text-sm text-gray-500">
@@ -36,6 +47,7 @@ export default function ChartingScreen() {
           entries={entries}
           intercourseByDate={intercourseByDate}
           isEmpty={isEmpty}
+          edit={{ householdId, memberId, resetTime, timeZone, onRefresh: refresh }}
         />
       )}
     </Screen>

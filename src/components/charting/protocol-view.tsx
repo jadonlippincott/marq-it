@@ -1,6 +1,9 @@
 import { Text, View } from "react-native";
 
-import { NursingMotherChart } from "@/components/charting/nursing-mother-chart";
+import {
+  NursingMotherChart,
+  type ChartEditContext,
+} from "@/components/charting/nursing-mother-chart";
 import type { ChartEntry, Protocol } from "@/lib/chart-data";
 
 /**
@@ -22,12 +25,14 @@ export function ProtocolView({
   entries,
   intercourseByDate,
   isEmpty,
+  edit,
 }: {
   protocol: Protocol;
   today: string;
   entries: ChartEntry[];
   intercourseByDate: Record<string, number>;
   isEmpty: boolean;
+  edit: ChartEditContext;
 }) {
   if (protocol === "nursing_mother") {
     return (
@@ -36,6 +41,7 @@ export function ProtocolView({
         entries={entries}
         intercourseByDate={intercourseByDate}
         isEmpty={isEmpty}
+        edit={edit}
       />
     );
   }

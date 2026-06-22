@@ -2,7 +2,17 @@ import { render, screen } from "@testing-library/react-native";
 
 import { PROTOCOL_META, ProtocolView } from "../protocol-view";
 
-const baseProps = { today: "2024-06-10", entries: [], intercourseByDate: {} };
+// ProtocolView pulls in the edit data layer (→ supabase) at module load.
+jest.mock("@/lib/supabase", () => ({ supabase: { from: jest.fn() } }));
+
+const edit = {
+  householdId: "hh-1",
+  memberId: "m-1",
+  resetTime: "04:00:00",
+  timeZone: "UTC",
+  onRefresh: async () => {},
+};
+const baseProps = { today: "2024-06-10", entries: [], intercourseByDate: {}, edit };
 
 describe("PROTOCOL_META", () => {
   it("marks only Nursing Mother as supported", () => {
@@ -36,6 +46,7 @@ describe("ProtocolView routing", () => {
         entries={[{ chartDate: "2024-06-10", reading: "peak" }]}
         intercourseByDate={{ "2024-06-10": 1 }}
         isEmpty={false}
+        edit={edit}
       />,
     );
     expect(screen.getByTestId("calendar-header")).toBeTruthy();
