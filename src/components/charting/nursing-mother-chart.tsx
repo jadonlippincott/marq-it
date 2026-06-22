@@ -1,15 +1,18 @@
+import { useMemo, useRef, useState } from "react";
 import { Text, View } from "react-native";
 
-import { DayCardsColumn } from "@/components/charting/day-cards-column";
+import { CalendarHeader } from "@/components/charting/calendar-header";
+import { DayCardsColumn, type DayCardsColumnHandle } from "@/components/charting/day-cards-column";
 import type { ChartEntry } from "@/lib/chart-data";
 import { buildDayCards } from "@/lib/day-cards";
 
 /**
- * Nursing Mother (10-day) chart view (MI-20 scaffold, MI-21 day-cards column).
+ * Nursing Mother (10-day) chart view.
  *
- * Renders the scrollable day-cards column (one card per charting day, opening on
- * today) or an empty state before any reading is recorded. The calendar mini-view
- * header (MI-22) and per-card editing (MI-23) mount inside this view next.
+ * Renders the calendar mini-view header (MI-22) above the scrollable day-cards
+ * column (MI-21), or an empty state before any reading is recorded. The header
+ * and column share a selected date: tapping a date scrolls the column to it, and
+ * scrolling the column moves the header (two-way sync). Per-card editing is MI-23.
  */
 export function NursingMotherChart({
   today,
@@ -33,15 +36,41 @@ export function NursingMotherChart({
     );
   }
 
-  const cards = buildDayCards({ today, entries, intercourseByDate });
+  return (
+    <ChartContent today={today} entries={entries} intercourseByDate={intercourseByDate} />
+  );
+}
+
+function ChartContent({
+  today,
+  entries,
+  intercourseByDate,
+}: {
+  today: string;
+  entries: ChartEntry[];
+  intercourseByDate: Record<string, number>;
+}) {
+  const cards = useMemo(
+    () => buildDayCards({ today, entries, intercourseByDate }),
+    [today, entries, intercourseByDate],
+  );
+  const [selectedDate, setSelectedDate] = useState(today);
+  const columnRef = useRef<DayCardsColumnHandle>(null);
+
+  // Header tap → select + scroll the column there.
+  const onSelectDate = (chartDate: string) => {
+    setSelectedDate(chartDate);
+    columnRef.current?.scrollToDate(chartDate);
+  };
 
   return (
     <View testID="nursing-mother-chart" className="flex-1 gap-2">
       <Text className="text-sm font-medium uppercase tracking-widest text-gray-400">
         Nursing Mother
       </Text>
-      {/* Calendar mini-view header mounts above the column in MI-22. */}
-      <DayCardsColumn cards={cards} />
+      <CalendarHeader cards={cards} selectedDate={selectedDate} onSelectDate={onSelectDate} />
+      {/* Column scroll → header follows (only while the user is dragging). */}
+      <DayCardsColumn ref={columnRef} cards={cards} onVisibleDateChange={setSelectedDate} />
     </View>
   );
 }

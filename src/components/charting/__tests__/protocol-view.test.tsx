@@ -28,7 +28,7 @@ describe("ProtocolView routing", () => {
     }
   });
 
-  it("renders the day-cards column once entries exist", () => {
+  it("renders the calendar header and day-cards column once entries exist", () => {
     render(
       <ProtocolView
         protocol="nursing_mother"
@@ -38,6 +38,7 @@ describe("ProtocolView routing", () => {
         isEmpty={false}
       />,
     );
+    expect(screen.getByTestId("calendar-header")).toBeTruthy();
     expect(screen.getByTestId("day-cards-column")).toBeTruthy();
   });
 });

@@ -1,5 +1,5 @@
 import type { ChartEntry } from "@/lib/chart-data";
-import { buildDayCards } from "@/lib/day-cards";
+import { buildDayCards, hasActivity, indexOfChartDate, type DayCard } from "@/lib/day-cards";
 
 const TODAY = "2024-06-10";
 
@@ -44,5 +44,31 @@ describe("buildDayCards", () => {
     const cards = buildDayCards({ today: TODAY, entries: [], intercourseByDate: {}, minDays: 4 });
     const dates = cards.map((c) => c.chartDate);
     expect(dates).toEqual([...dates].sort());
+  });
+});
+
+describe("indexOfChartDate", () => {
+  const cards = buildDayCards({ today: TODAY, entries: [], intercourseByDate: {}, minDays: 5 });
+
+  it("finds the index of a date in the window", () => {
+    expect(indexOfChartDate(cards, "2024-06-06")).toBe(0);
+    expect(indexOfChartDate(cards, TODAY)).toBe(cards.length - 1);
+  });
+
+  it("returns -1 for a date outside the window", () => {
+    expect(indexOfChartDate(cards, "2020-01-01")).toBe(-1);
+  });
+});
+
+describe("hasActivity", () => {
+  const base: DayCard = { chartDate: "2024-06-10", reading: null, intercourseCount: 0, isToday: false };
+
+  it("is true when there is a reading or intercourse", () => {
+    expect(hasActivity({ ...base, reading: "low" })).toBe(true);
+    expect(hasActivity({ ...base, intercourseCount: 1 })).toBe(true);
+  });
+
+  it("is false for an empty day", () => {
+    expect(hasActivity(base)).toBe(false);
   });
 });
