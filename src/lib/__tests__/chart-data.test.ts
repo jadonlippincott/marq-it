@@ -13,7 +13,7 @@ const mockFrom = supabase.from as jest.Mock;
  *   intercourse_events: from().select().eq()
  */
 function mockTables(opts: {
-  member: { household_id: string } | null;
+  member: { id: string; household_id: string } | null;
   settings?: { protocol?: string; reset_time?: string; timezone?: string } | null;
   entries?: { chart_date: string; reading: string }[];
   intercourse?: { occurred_at: string }[];
@@ -57,7 +57,7 @@ describe("loadChartData", () => {
 
   it("loads protocol, entries, today, and per-day intercourse counts", async () => {
     mockTables({
-      member: { household_id: "hh-1" },
+      member: { id: "m-1", household_id: "hh-1" },
       settings: { protocol: "nursing_mother", reset_time: "04:00:00", timezone: "UTC" },
       entries: [
         { chart_date: "2024-06-10", reading: "peak" },
@@ -74,7 +74,10 @@ describe("loadChartData", () => {
     const data = await loadChartData("auth-1", NOW);
     expect(data).toEqual({
       householdId: "hh-1",
+      memberId: "m-1",
       protocol: "nursing_mother",
+      resetTime: "04:00:00",
+      timeZone: "UTC",
       entries: [
         { chartDate: "2024-06-10", reading: "peak" },
         { chartDate: "2024-06-09", reading: "high" },
@@ -86,7 +89,12 @@ describe("loadChartData", () => {
   });
 
   it("reports an empty chart and defaults protocol/reset when settings are absent", async () => {
-    mockTables({ member: { household_id: "hh-1" }, settings: null, entries: [], intercourse: [] });
+    mockTables({
+      member: { id: "m-1", household_id: "hh-1" },
+      settings: null,
+      entries: [],
+      intercourse: [],
+    });
     const data = await loadChartData("auth-1", NOW);
     expect(data?.isEmpty).toBe(true);
     expect(data?.protocol).toBe("nursing_mother"); // default

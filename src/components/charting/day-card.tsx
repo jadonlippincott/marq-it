@@ -1,4 +1,4 @@
-import { Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 
 import type { DayCard as DayCardModel } from "@/lib/day-cards";
 import type { Reading } from "@/lib/chart-data";
@@ -23,14 +23,17 @@ function formatChartDate(chartDate: string): string {
   }).format(new Date(Date.UTC(y, m - 1, d)));
 }
 
-export function DayCard({ card }: { card: DayCardModel }) {
+export function DayCard({ card, onPress }: { card: DayCardModel; onPress?: () => void }) {
   const reading = card.reading ? READING_STYLE[card.reading] : null;
 
   return (
-    <View
+    <Pressable
       testID={`day-card-${card.chartDate}`}
+      accessibilityRole="button"
+      accessibilityLabel={`Edit ${card.chartDate}`}
+      onPress={onPress}
       style={{ height: DAY_CARD_HEIGHT }}
-      className={`flex-row items-center justify-between rounded-2xl border px-4 ${
+      className={`flex-row items-center justify-between rounded-2xl border px-4 active:opacity-70 ${
         card.isToday ? "border-2 border-blue-500 bg-blue-50" : "border-gray-200 bg-white"
       }`}
     >
@@ -55,6 +58,6 @@ export function DayCard({ card }: { card: DayCardModel }) {
           <Text className="text-sm text-gray-300">—</Text>
         )}
       </View>
-    </View>
+    </Pressable>
   );
 }

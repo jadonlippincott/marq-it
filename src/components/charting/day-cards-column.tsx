@@ -22,8 +22,12 @@ export type DayCardsColumnHandle = {
  */
 export const DayCardsColumn = forwardRef<
   DayCardsColumnHandle,
-  { cards: DayCardModel[]; onVisibleDateChange?: (chartDate: string) => void }
->(function DayCardsColumn({ cards, onVisibleDateChange }, ref) {
+  {
+    cards: DayCardModel[];
+    onVisibleDateChange?: (chartDate: string) => void;
+    onCardPress?: (chartDate: string) => void;
+  }
+>(function DayCardsColumn({ cards, onVisibleDateChange, onCardPress }, ref) {
   const listRef = useRef<FlatList<DayCardModel>>(null);
   const todayIndex = Math.max(0, cards.length - 1);
   // Only follow the user's own scrolling — ignore viewable changes caused by a
@@ -61,7 +65,9 @@ export const DayCardsColumn = forwardRef<
       testID="day-cards-column"
       data={cards}
       keyExtractor={(card) => card.chartDate}
-      renderItem={({ item }) => <DayCard card={item} />}
+      renderItem={({ item }) => (
+        <DayCard card={item} onPress={onCardPress ? () => onCardPress(item.chartDate) : undefined} />
+      )}
       ItemSeparatorComponent={() => <View style={{ height: GAP }} />}
       getItemLayout={(_, index) => ({ length: ROW_HEIGHT, offset: ROW_HEIGHT * index, index })}
       initialScrollIndex={todayIndex}

@@ -21,7 +21,12 @@ export type ChartEntry = {
 
 export type ChartData = {
   householdId: string;
+  /** The signed-in member's id — recorded as updated_by/recorded_by on edits. */
+  memberId: string;
   protocol: Protocol;
+  /** Household reset time + timezone, carried so edits can place/bucket by day. */
+  resetTime: string;
+  timeZone: string;
   /** Day entries, most-recent first. Empty until the couple records a reading. */
   entries: ChartEntry[];
   /** Intercourse event count keyed by reset-adjusted chart date. */
@@ -41,7 +46,7 @@ export async function loadChartData(
 ): Promise<ChartData | null> {
   const { data: member } = await supabase
     .from("members")
-    .select("household_id")
+    .select("id, household_id")
     .eq("auth_user_id", authUserId)
     .maybeSingle();
   if (!member) return null;
@@ -82,7 +87,10 @@ export async function loadChartData(
 
   return {
     householdId: member.household_id,
+    memberId: member.id,
     protocol,
+    resetTime,
+    timeZone,
     entries,
     intercourseByDate,
     today: chartDateFor(now, resetTime, timeZone),
