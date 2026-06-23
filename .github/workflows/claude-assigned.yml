@@ -1,0 +1,196 @@
+name: "Claude: Work Assigned Ticket"
+
+  # Headless Claude Code run, triggered when a TireTrack ticket is assigned to the
+  # Claude bot user. The TireTrack backend fires a `repository_dispatch`
+  # (event_type: claude-assigned) carrying the ticket in `client_payload`. Claude
+  # works the ticket on an isolated branch, opens a DRAFT PR, and the final step
+  # calls back so the backend comments the PR link and hands the ticket back to its
+  # reporter. A human reviews the PR — Claude never pushes to main.
+  #
+  # `workflow_dispatch` lets you exercise the run path manually (Actions → Run
+  # workflow) before relying on the backend auto-trigger.
+
+  on:
+    repository_dispatch:
+      types: [claude-assigned]
+    workflow_dispatch:
+      inputs:
+        issue_key:
+          description: "Ticket key (e.g. TNO1-34)"
+          required: true
+        issue_title:
+          description: "Ticket title"
+          required: false
+        issue_body:
+          description: "Ticket body"
+          required: false
+        issue_url:
+          description: "Ticket URL"
+          required: false
+        issue_id:
+          description: "Ticket UUID (for comment-back)"
+          required: false
+
+  # One run per ticket; don't cancel an in-flight run if re-assigned.
+  concurrency:
+    group: claude-assigned-${{ github.event.client_payload.issue_key ||
+  github.event.inputs.issue_key }}
+    cancel-in-progress: false
+
+  permissions:
+    contents: write
+    pull-requests: write
+
+  jobs:
+    work-ticket:
+      name: Work ticket with Claude
+      runs-on: ubuntu-latest
+      timeout-minutes: 30
+      env:
+        # Ticket fields are UNTRUSTED. They're read into env vars and only ever
+        # referenced as "$VAR" (quoted) — never interpolated into a shell string
+        # or an eval — so a body containing shell metacharacters is inert.
+        TICKET_KEY: ${{ github.event.client_payload.issue_key ||
+  github.event.inputs.issue_key }}
+        TICKET_TITLE: ${{ github.event.client_payload.issue_title ||
+  github.event.inputs.issue_title }}
+        TICKET_BODY: ${{ github.event.client_payload.issue_body ||
+  github.event.inputs.issue_body }}
+        TICKET_URL: ${{ github.event.client_payload.issue_url ||
+  github.event.inputs.issue_url }}
+        TICKET_ISSUE_ID: ${{ github.event.client_payload.issue_id ||
+  github.event.inputs.issue_id }}
+        CALLBACK_API_BASE: ${{ github.event.client_payload.callback_api_base }}
+        PROMPT_INSTRUCTIONS: ${{ github.event.client_payload.prompt_instructions }}
+        SKIP_PERMISSIONS: ${{ github.event.client_payload.skip_permissions }}
+        ENVIRONMENT: ${{ github.event.client_payload.environment }}
+      steps:
+        - name: Checkout
+          uses: actions/checkout@v4
+          with:
+            fetch-depth: 0
+
+        - name: Set up Node
+          uses: actions/setup-node@v4
+          with:
+            node-version: 20
+
+        - name: Install Claude Code
+          run: npm install -g @anthropic-ai/claude-code
+
+        - name: Register TireTrack MCP (Claude skill)
+          if: env.CALLBACK_API_BASE != ''
+          env:
+            TIRETRACK_API_TOKEN: ${{ secrets.TIRETRACK_API_TOKEN }}
+          run: |
+            set -euo pipefail
+            if [ "${ENVIRONMENT:-prod}" = "prod" ]; then
+              pipx install tiretrack-mcp || pip install --user tiretrack-mcp
+            else
+              pipx install --pip-args=--pre tiretrack-mcp || pip install --pre --user
+  tiretrack-mcp
+            fi
+            claude mcp add tiretrack \
+              -e "TIRETRACK_API_URL=${CALLBACK_API_BASE}" \
+              -e "TIRETRACK_API_TOKEN=${TIRETRACK_API_TOKEN}" \
+              -- tiretrack-mcp
+
+        - name: Create working branch
+          id: branch
+          run: |
+            set -euo pipefail
+            BRANCH="claude/${TICKET_KEY}-${GITHUB_RUN_ID}"
+            git config user.name "Claude (TireTrack bot)"
+            git config user.email "claude-bot@tiretrack.mi.tirerack.com"
+            git checkout -b "$BRANCH"
+            echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+
+        - name: Run Claude Code on the ticket
+          env:
+            CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          run: |
+            set -euo pipefail
+            INSTRUCTIONS="${PROMPT_INSTRUCTIONS:-Implement the change described in the
+  ticket below. Leave the work committed on the current branch; do not push or open a
+  PR.}"
+
+            PROMPT="${INSTRUCTIONS}
+
+            Ticket: ${TICKET_KEY} — ${TICKET_TITLE}
+            URL: ${TICKET_URL}
+
+            Ticket description:
+            ${TICKET_BODY}"
+
+            if [ "${SKIP_PERMISSIONS:-}" = "true" ]; then
+              echo "Running Claude with --dangerously-skip-permissions (per project
+  setting)."
+              claude -p "$PROMPT" --dangerously-skip-permissions
+            else
+              claude -p "$PROMPT" \
+                --permission-mode acceptEdits \
+                --allowedTools
+  "Edit,Write,Read,Grep,Glob,Bash(git:*),Bash(npm:*),Bash(npx:*),mcp__tiretrack"
+            fi
+
+        - name: Commit changes
+          id: commit
+          run: |
+            set -euo pipefail
+            git add -A
+            if git diff --cached --quiet; then
+              echo "Claude produced no changes."
+              echo "changed=false" >> "$GITHUB_OUTPUT"
+            else
+              git commit -m "${TICKET_KEY}: automated draft from Claude
+
+            ${TICKET_TITLE}
+
+            Ticket: ${TICKET_URL}"
+              echo "changed=true" >> "$GITHUB_OUTPUT"
+            fi
+
+        - name: Push branch & open draft PR
+          id: pr
+          if: steps.commit.outputs.changed == 'true'
+          env:
+            GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          run: |
+            set -euo pipefail
+            BRANCH="${{ steps.branch.outputs.branch }}"
+            git push -u origin "$BRANCH"
+            PR_URL=$(gh pr create \
+              --draft \
+              --base main \
+              --head "$BRANCH" \
+              --title "[${TICKET_KEY}] ${TICKET_TITLE} (Claude draft)" \
+              --body "Automated draft for **${TICKET_KEY}** by Claude Code.
+
+            Ticket: ${TICKET_URL}
+
+            > Generated headlessly via the \`claude-assigned\` workflow. Review before
+  merging — Claude never pushes to main.")
+            echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
+            echo "Opened draft PR: $PR_URL"
+
+        - name: Report completion to TireTrack
+          if: always() && env.TICKET_ISSUE_ID != '' && env.CALLBACK_API_BASE != ''
+          env:
+            TIRETRACK_API_TOKEN: ${{ secrets.TIRETRACK_API_TOKEN }}
+          run: |
+            set -euo pipefail
+            if [ "${{ steps.commit.outputs.changed }}" = "true" ] && [ -n "${{
+  steps.pr.outputs.pr_url }}" ]; then
+              RESULT="pr_opened"; PR_URL="${{ steps.pr.outputs.pr_url }}"
+            elif [ "${{ steps.commit.outputs.changed }}" = "false" ]; then
+              RESULT="no_changes"; PR_URL=""
+            else
+              RESULT="failed"; PR_URL=""
+            fi
+            PAYLOAD=$(jq -n --arg r "$RESULT" --arg u "$PR_URL" \
+              '{result: $r} + (if $u == "" then {} else {pr_url: $u} end)')
+            curl --fail-with-body -sS -X POST \
+              "${CALLBACK_API_BASE}/api/v1/issues/${TICKET_ISSUE_ID}/claude-callback" \
+              -H "Authorization: Bearer ${TIRETRACK_API_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "$PAYLOAD"
