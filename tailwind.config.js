@@ -9,7 +9,7 @@ module.exports = {
         reading: {
           low: "#16a34a", // green
           high: "#eab308", // amber
-          peak: "#dc2626", // red
+          peak: "#f97316", // orange
         },
       },
     },
