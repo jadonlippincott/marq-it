@@ -66,6 +66,11 @@ jobs:
       # Deploy environment of the firing backend (dev/prod) — selects the
       # matching TireTrack MCP build (dev pre-release vs stable).
       ENVIRONMENT: ${{ github.event.client_payload.environment }}
+      # TT-228: project + target column for self-filed out-of-scope findings.
+      # Present only on the auto-dispatch path; absent on manual workflow_dispatch
+      # (the self-file instructions are then omitted).
+      PROJECT_ID: ${{ github.event.client_payload.project_id }}
+      FINDINGS_STATUS: ${{ github.event.client_payload.findings_status }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
