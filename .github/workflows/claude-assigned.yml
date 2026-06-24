@@ -1,14 +1,17 @@
 name: "Claude: Work Assigned Ticket"
 
-# Headless Claude Code run, triggered when a TireTrack ticket is assigned to the
-# Claude bot user. The TireTrack backend fires a `repository_dispatch`
-# (event_type: claude-assigned) carrying the ticket in `client_payload`. Claude
-# works the ticket on an isolated branch, opens a DRAFT PR, and the final step
-# calls back so the backend comments the PR link and hands the ticket back to its
-# reporter. A human reviews the PR — Claude never pushes to main.
+# TT-221: headless Claude Code run, triggered when a TireTrack ticket is
+# assigned to the Claude bot user. The backend fires a `repository_dispatch`
+# (event_type: claude-assigned) carrying the ticket in `client_payload` — and
+# only once the ticket's blockers have cleared (gating is backend-side).
+# Claude works the ticket on an isolated branch with the TireTrack MCP available
+# as a skill (read blockers / related tickets / comments) and commits, pushes,
+# and opens a DRAFT PR itself; the final step calls back so the backend comments
+# the PR link and hands the ticket back to its reporter. A human reviews the PR —
+# Claude never pushes to main.
 #
-# `workflow_dispatch` lets you exercise the run path manually (Actions → Run
-# workflow) before relying on the backend auto-trigger.
+# `workflow_dispatch` is included so the run path can be exercised manually
+# (Actions → Run workflow) before the backend auto-trigger is enabled.
 
 on:
   repository_dispatch:
@@ -16,13 +19,13 @@ on:
   workflow_dispatch:
     inputs:
       issue_key:
-        description: "Ticket key (e.g. TNO1-34)"
+        description: "Ticket key (e.g. TT-221)"
         required: true
       issue_title:
         description: "Ticket title"
         required: false
       issue_body:
-        description: "Ticket body"
+        description: "Ticket body (Current/Desired/Dev Notes)"
         required: false
       issue_url:
         description: "Ticket URL"
@@ -55,14 +58,25 @@ jobs:
       TICKET_URL: ${{ github.event.client_payload.issue_url || github.event.inputs.issue_url }}
       TICKET_ISSUE_ID: ${{ github.event.client_payload.issue_id || github.event.inputs.issue_id }}
       CALLBACK_API_BASE: ${{ github.event.client_payload.callback_api_base }}
+      # Per-project instruction preamble curated in TireTrack project settings.
+      # Empty on the manual workflow_dispatch path → the step uses a minimal one.
       PROMPT_INSTRUCTIONS: ${{ github.event.client_payload.prompt_instructions }}
+      # Per-project toggle: 'true' runs Claude with --dangerously-skip-permissions.
       SKIP_PERMISSIONS: ${{ github.event.client_payload.skip_permissions }}
+      # Deploy environment of the firing backend (dev/prod) — selects the
+      # matching TireTrack MCP build (dev pre-release vs stable).
       ENVIRONMENT: ${{ github.event.client_payload.environment }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # Persist a PAT (when configured) as the git credential so the branch
+          # push Claude makes is authenticated as a real user — that's what lets
+          # the draft PR trigger CI (`ci.yml`). Branches/PRs created with the
+          # default GITHUB_TOKEN do NOT trigger other workflows. Falls back to the
+          # automatic token when CLAUDE_PR_PAT isn't set (PR opens, CI won't run).
+          token: ${{ secrets.CLAUDE_PR_PAT || github.token }}
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -78,11 +92,18 @@ jobs:
           TIRETRACK_API_TOKEN: ${{ secrets.TIRETRACK_API_TOKEN }}
         run: |
           set -euo pipefail
+          # Published to PyPI by publish-mcp.yml. Gives the run mcp__tiretrack__*
+          # tools (read blockers, related tickets, comments) as a "skill". Match
+          # the build to the deploy: prod → stable release; dev/other → the
+          # latest pre-release (`X.Y.Z.devN`, published by the dev release type).
           if [ "${ENVIRONMENT:-prod}" = "prod" ]; then
             pipx install tiretrack-mcp || pip install --user tiretrack-mcp
           else
             pipx install --pip-args=--pre tiretrack-mcp || pip install --pre --user tiretrack-mcp
           fi
+          # Project-scoped registration writes .mcp.json so `claude -p` finds it.
+          # TIRETRACK_API_URL points at this stage's API base (same as the
+          # callback base); the MCP client appends the /api/v1 paths.
           claude mcp add tiretrack \
             -e "TIRETRACK_API_URL=${CALLBACK_API_BASE}" \
             -e "TIRETRACK_API_TOKEN=${TIRETRACK_API_TOKEN}" \
@@ -98,82 +119,117 @@ jobs:
           git checkout -b "$BRANCH"
           echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
 
-      - name: Run Claude Code on the ticket
-        env:
-          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      - name: Provision headless browser (only if the repo has Playwright)
         run: |
           set -euo pipefail
-          INSTRUCTIONS="${PROMPT_INSTRUCTIONS:-Implement the change described in the ticket below. Leave the work committed on the current branch; do not push or open a PR.}"
+          # This workflow is committed verbatim into every connected repo (TT-222),
+          # so browser provisioning must self-gate: only repos that actually declare
+          # Playwright get a browser. Everything else (e.g. React Native / Expo
+          # projects, backend-only repos) no-ops here and pays nothing.
+          #
+          # The runner is headless — there is no system Chrome. Playwright ships its
+          # OWN pinned Chromium; we install deps in the detecting package first so it
+          # is the PROJECT's Playwright that fetches its matching browser build (no
+          # version drift), and `--with-deps` adds the headless OS libraries via sudo.
+          # Claude then runs the suite itself with its existing Bash(npm:*) grant
+          # (e.g. `npm run test:e2e`); the browser binary waits in ~/.cache/ms-playwright.
+          pkg=$(grep -rl --include=package.json --exclude-dir=node_modules \
+                  '"@playwright/test"' . 2>/dev/null | head -n1 || true)
+          if [ -z "$pkg" ]; then
+            echo "No Playwright declared in this repo — skipping browser provisioning."
+            exit 0
+          fi
+          dir=$(dirname "$pkg")
+          echo "Playwright detected in '$dir' — installing deps + headless Chromium."
+          ( cd "$dir" && npm ci && npx playwright install --with-deps chromium )
 
+      - name: Run Claude Code on the ticket
+        id: claude
+        env:
+          # Authenticated against an Anthropic Team subscription seat (NOT
+          # Bedrock / metered API). Issued via `claude setup-token`.
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Lets Claude run `gh` so it commits, pushes, and opens the draft PR
+          # itself (no separate CI step). Prefer a PAT so the PR triggers CI;
+          # fall back to the automatic token (PR opens but won't run downstream CI).
+          GH_TOKEN: ${{ secrets.CLAUDE_PR_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Instruction preamble is resolved server-side and arrives in
+          # client_payload (single source: config.DEFAULT_CLAUDE_PROMPT). Only
+          # the manual workflow_dispatch path lacks it — use a minimal stand-in
+          # there. All values are treated as data and expanded quoted, never eval'd.
+          INSTRUCTIONS="${PROMPT_INSTRUCTIONS:-Implement the change described in the ticket below, then commit your work on the current branch.}"
+
+          # The ticket block AND the push/PR contract are always appended here,
+          # never curated away, so a custom project prompt can't drop the ticket
+          # context or the steps that get the work onto a PR. ${TICKET_*} are
+          # untrusted data; the PR plumbing below is ours.
           PROMPT="${INSTRUCTIONS}
 
           Ticket: ${TICKET_KEY} — ${TICKET_TITLE}
           URL: ${TICKET_URL}
 
           Ticket description:
-          ${TICKET_BODY}"
+          ${TICKET_BODY}
 
+          When you have finished implementing AND you made code changes, open a PR:
+          1. Commit your work on the current branch.
+          2. Push the current branch: git push -u origin HEAD
+          3. Open a DRAFT pull request against main with the gh CLI, for example:
+             gh pr create --draft --base main --title \"[${TICKET_KEY}] ${TICKET_TITLE} (Claude draft)\" --body \"Automated draft for ${TICKET_KEY} by Claude Code. Ticket: ${TICKET_URL} — review before merging; Claude never pushes to main.\"
+          If you produced no code changes, do not commit, push, or open a PR."
+
+          # Permission mode is per-project. The scoped allowlist is the default;
+          # skip-permissions is opt-in (the runner is sandboxed CI).
           if [ "${SKIP_PERMISSIONS:-}" = "true" ]; then
             echo "Running Claude with --dangerously-skip-permissions (per project setting)."
             claude -p "$PROMPT" --dangerously-skip-permissions
           else
+            # Bash(gh:*) lets Claude push + open the PR; mcp__tiretrack allows the
+            # TireTrack MCP skill (no-op if unregistered).
             claude -p "$PROMPT" \
               --permission-mode acceptEdits \
-              --allowedTools "Edit,Write,Read,Grep,Glob,Bash(git:*),Bash(npm:*),Bash(npx:*),mcp__tiretrack"
+              --allowedTools "Edit,Write,Read,Grep,Glob,Bash(git:*),Bash(npm:*),Bash(gh:*),mcp__tiretrack"
           fi
 
-      - name: Commit changes
-        id: commit
-        run: |
-          set -euo pipefail
-          git add -A
-          if git diff --cached --quiet; then
-            echo "Claude produced no changes."
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
-            git commit -m "${TICKET_KEY}: automated draft from Claude
-
-          ${TICKET_TITLE}
-
-          Ticket: ${TICKET_URL}"
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Push branch & open draft PR
-        id: pr
-        if: steps.commit.outputs.changed == 'true'
+      - name: Determine result
+        id: result
+        if: always()
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.CLAUDE_PR_PAT || secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          # Claude owns commit/push/PR, so the PR itself (queried from GitHub) is
+          # the source of truth — no brittle file hand-off. Map to the three
+          # outcomes the backend callback understands: pr_opened / no_changes / failed.
           BRANCH="${{ steps.branch.outputs.branch }}"
-          git push -u origin "$BRANCH"
-          PR_URL=$(gh pr create \
-            --draft \
-            --base main \
-            --head "$BRANCH" \
-            --title "[${TICKET_KEY}] ${TICKET_TITLE} (Claude draft)" \
-            --body "Automated draft for **${TICKET_KEY}** by Claude Code.
-
-          Ticket: ${TICKET_URL}
-
-          > Generated headlessly via the \`claude-assigned\` workflow. Review before merging — Claude never pushes to main.")
+          PR_URL="$(gh pr view "$BRANCH" --json url --jq .url 2>/dev/null || true)"
+          if [ -n "$PR_URL" ]; then
+            RESULT="pr_opened"
+          elif [ "${{ steps.claude.outcome }}" = "failure" ]; then
+            RESULT="failed"
+          elif [ -n "$(git log --oneline origin/main..HEAD 2>/dev/null)" ]; then
+            # Claude committed changes but never opened a PR — surface as failed.
+            RESULT="failed"
+          else
+            RESULT="no_changes"
+          fi
+          echo "result=$RESULT" >> "$GITHUB_OUTPUT"
           echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
-          echo "Opened draft PR: $PR_URL"
+          echo "Determined result=$RESULT pr_url=${PR_URL:-<none>}"
 
       - name: Report completion to TireTrack
         if: always() && env.TICKET_ISSUE_ID != '' && env.CALLBACK_API_BASE != ''
         env:
+          # PAT for the Claude bot TireTrack user.
           TIRETRACK_API_TOKEN: ${{ secrets.TIRETRACK_API_TOKEN }}
         run: |
           set -euo pipefail
-          if [ "${{ steps.commit.outputs.changed }}" = "true" ] && [ -n "${{ steps.pr.outputs.pr_url }}" ]; then
-            RESULT="pr_opened"; PR_URL="${{ steps.pr.outputs.pr_url }}"
-          elif [ "${{ steps.commit.outputs.changed }}" = "false" ]; then
-            RESULT="no_changes"; PR_URL=""
-          else
-            RESULT="failed"; PR_URL=""
-          fi
+          # Hand the result to the backend, which comments the outcome and
+          # reassigns the ticket back to its reporter (the author).
+          RESULT="${{ steps.result.outputs.result }}"
+          PR_URL="${{ steps.result.outputs.pr_url }}"
           PAYLOAD=$(jq -n --arg r "$RESULT" --arg u "$PR_URL" \
             '{result: $r} + (if $u == "" then {} else {pr_url: $u} end)')
           curl --fail-with-body -sS -X POST \
