@@ -11,6 +11,6 @@ export type Reading = (typeof READINGS)[number];
 /** Color per reading — mirrors `theme.colors.reading` in tailwind.config.js. */
 export const READING_COLORS: Record<Reading, string> = {
   low: "#16a34a",
-  high: "#eab308",
+  high: "#c8a2c8",
   peak: "#f97316",
 };
