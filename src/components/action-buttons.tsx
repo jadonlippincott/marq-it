@@ -17,7 +17,7 @@ const ACTION_STYLES: Record<Action, { container: string; label: string }> = {
   Low: { container: "bg-reading-low", label: "text-white" },
   High: { container: "bg-reading-high", label: "text-gray-900" },
   Peak: { container: "bg-reading-peak", label: "text-white" },
-  Intercourse: { container: "bg-blue-600", label: "text-white" },
+  Intercourse: { container: "bg-intercourse", label: "text-gray-900" },
 };
 
 const READING_ACTIONS: Action[] = ["Low", "High", "Peak"];
