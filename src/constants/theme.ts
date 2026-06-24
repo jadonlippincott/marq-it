@@ -12,5 +12,5 @@ export type Reading = (typeof READINGS)[number];
 export const READING_COLORS: Record<Reading, string> = {
   low: "#16a34a",
   high: "#eab308",
-  peak: "#f97316",
+  peak: "#c026d3",
 };

@@ -8,7 +8,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
  */
 export function Screen({ children }: { children: ReactNode }) {
   return (
-    <SafeAreaView className="flex-1 bg-white" edges={["top", "bottom"]}>
+    <SafeAreaView className="flex-1 bg-gray-100" edges={["top", "bottom"]}>
       <View className="flex-1 px-6 py-4">{children}</View>
     </SafeAreaView>
   );

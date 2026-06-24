@@ -9,8 +9,9 @@ module.exports = {
         reading: {
           low: "#a855f7", // soft purple
           high: "#eab308", // amber
-          peak: "#f97316", // orange
+          peak: "#c026d3", // magenta-purple
         },
+        intercourse: "#fef08a", // pastel yellow
       },
     },
   },
