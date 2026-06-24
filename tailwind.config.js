@@ -7,7 +7,7 @@ module.exports = {
       colors: {
         // MarqIt fertility-reading palette — refine in the UI tickets (MI-14/15).
         reading: {
-          low: "#16a34a", // green
+          low: "#a855f7", // soft purple
           high: "#eab308", // amber
           peak: "#f97316", // orange
         },
