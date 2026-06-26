@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { AppState } from "react-native";
 
+import { useHouseholdRealtime } from "@/hooks/use-household-realtime";
 import { useAuth } from "@/lib/auth";
 import { recordIntercourse } from "@/lib/intercourse";
-import { supabase } from "@/lib/supabase";
 import {
   type ReadingLabel,
   type TodayState,
@@ -57,32 +57,8 @@ export function useTodayReading() {
   }, [userId]);
 
   // Realtime: reload whenever this household's day_entries or intercourse_events
-  // change. RLS scopes delivery to the member's own household.
-  useEffect(() => {
-    const householdId = state?.householdId;
-    if (!householdId) return;
-    const filter = `household_id=eq.${householdId}`;
-    const channel = supabase
-      .channel(`home:${householdId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "day_entries", filter },
-        () => {
-          refresh();
-        },
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "intercourse_events", filter },
-        () => {
-          refresh();
-        },
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [state?.householdId, refresh]);
+  // change, so the lock and count sync to the other spouse within seconds.
+  useHouseholdRealtime(state?.householdId, refresh);
 
   // Re-evaluate on foreground so crossing the reset time (or opening the app the
   // next morning) recomputes today's chart_date — unlocking the reading and

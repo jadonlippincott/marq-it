@@ -74,8 +74,8 @@ jobs:
       # TT-228: project + target column for self-filed out-of-scope findings.
       # Present only on the auto-dispatch path; absent on manual workflow_dispatch
       # (the self-file instructions are then omitted).
-      PROJECT_ID: ${{ github.event.client_payload.config.project_id }}
-      FINDINGS_STATUS: ${{ github.event.client_payload.config.findings_status }}
+      PROJECT_ID: ${{ github.event.client_payload.project_id }}
+      FINDINGS_STATUS: ${{ github.event.client_payload.findings_status }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
