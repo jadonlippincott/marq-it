@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { ActivityIndicator, Modal, Pressable, Text, View } from "react-native";
 
+import { PROTOCOL_META } from "@/components/charting/protocol-view";
 import { Screen } from "@/components/screen";
 import { useHouseholdSettings } from "@/hooks/use-household-settings";
 import { useAuth } from "@/lib/auth";
+import type { Protocol } from "@/lib/chart-data";
 import { createHouseholdInvite } from "@/lib/join";
 
 function formatResetTime(resetTime: string): string {
@@ -19,7 +21,8 @@ function toResetTimeString(hour: number, minute: number): string {
 
 export default function SettingsScreen() {
   const { signOut } = useAuth();
-  const { loading, saving, error: settingsError, settings, updateResetTime } = useHouseholdSettings();
+  const { loading, saving, error: settingsError, settings, updateResetTime, updateProtocol } =
+    useHouseholdSettings();
 
   const [code, setCode] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
@@ -89,6 +92,59 @@ export default function SettingsScreen() {
             </View>
           )}
 
+          {settingsError ? (
+            <Text accessibilityRole="alert" className="text-sm text-red-600">
+              {settingsError}
+            </Text>
+          ) : null}
+        </View>
+
+        {/* Protocol selection */}
+        <View className="gap-3">
+          <Text className="text-base font-semibold text-gray-900">Charting protocol</Text>
+          <Text className="text-sm text-gray-500">
+            Choose how fertility is charted. Only Nursing Mother is available now.
+          </Text>
+          {loading ? (
+            <ActivityIndicator />
+          ) : (
+            <View className="overflow-hidden rounded-2xl bg-gray-100">
+              {(Object.keys(PROTOCOL_META) as Protocol[]).map((key, index) => {
+                const meta = PROTOCOL_META[key];
+                const isSelected = (settings?.protocol ?? "nursing_mother") === key;
+                const isLast = index === Object.keys(PROTOCOL_META).length - 1;
+                return (
+                  <Pressable
+                    key={key}
+                    accessibilityRole="radio"
+                    accessibilityLabel={meta.label}
+                    accessibilityState={{ selected: isSelected, disabled: !meta.supported }}
+                    disabled={!meta.supported || saving}
+                    onPress={() => updateProtocol(key)}
+                    className={`flex-row items-center justify-between px-4 py-3 ${
+                      !isLast ? "border-b border-gray-200" : ""
+                    } ${meta.supported ? "active:bg-gray-200" : "opacity-50"}`}
+                  >
+                    <View className="flex-row items-center gap-2">
+                      <Text
+                        className={`text-base ${isSelected ? "font-semibold text-blue-600" : "text-gray-900"}`}
+                      >
+                        {meta.label}
+                      </Text>
+                      {!meta.supported ? (
+                        <View className="rounded-full bg-gray-300 px-2 py-0.5">
+                          <Text className="text-xs font-medium text-gray-600">Coming soon</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    {isSelected ? (
+                      <Text className="text-base font-bold text-blue-600">✓</Text>
+                    ) : null}
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
           {settingsError ? (
             <Text accessibilityRole="alert" className="text-sm text-red-600">
               {settingsError}
