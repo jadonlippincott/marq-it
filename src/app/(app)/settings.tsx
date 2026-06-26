@@ -1,55 +1,107 @@
 import { useState } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Modal, Pressable, Text, View } from "react-native";
 
-import { useAuth } from "@/lib/auth";
 import { Screen } from "@/components/screen";
+import { useHouseholdSettings } from "@/hooks/use-household-settings";
+import { useAuth } from "@/lib/auth";
 import { createHouseholdInvite } from "@/lib/join";
 
-/**
- * Settings — reset-time picker (MI-17), day-boundary logic (MI-18), and
- * protocol selection (MI-19) are still TODO (Settings epic, MI-4).
- *
- * Hosts the "Invite your spouse" action (MI-12) and Sign out (MI-13). Polished
- * layout comes with the Settings epic.
- */
+function formatResetTime(resetTime: string): string {
+  const [h, m] = resetTime.split(":").map(Number);
+  const period = (h ?? 0) >= 12 ? "PM" : "AM";
+  const hour12 = (h ?? 0) % 12 === 0 ? 12 : (h ?? 0) % 12;
+  return `${hour12}:${String(m ?? 0).padStart(2, "0")} ${period}`;
+}
+
+function toResetTimeString(hour: number, minute: number): string {
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}:00`;
+}
+
 export default function SettingsScreen() {
   const { signOut } = useAuth();
+  const { loading, saving, error: settingsError, settings, updateResetTime } = useHouseholdSettings();
+
   const [code, setCode] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviteLoading, setInviteLoading] = useState(false);
+
+  const [pickerVisible, setPickerVisible] = useState(false);
+  const [pickerHour, setPickerHour] = useState(4);
+  const [pickerMinute, setPickerMinute] = useState(0);
+
+  function openPicker() {
+    const [h, m] = (settings?.resetTime ?? "04:00:00").split(":").map(Number);
+    setPickerHour(h ?? 4);
+    // Round to nearest 5-minute mark so the ×5 stepper stays aligned.
+    setPickerMinute(Math.round((m ?? 0) / 5) * 5 % 60);
+    setPickerVisible(true);
+  }
+
+  async function onSaveResetTime() {
+    await updateResetTime(toResetTimeString(pickerHour, pickerMinute));
+    setPickerVisible(false);
+  }
 
   async function onInvite() {
-    setError(null);
-    setLoading(true);
+    setInviteError(null);
+    setInviteLoading(true);
     try {
-      const { code: newCode, error: inviteError } = await createHouseholdInvite();
-      if (inviteError) {
-        setError(inviteError);
+      const { code: newCode, error } = await createHouseholdInvite();
+      if (error) {
+        setInviteError(error);
         return;
       }
       setCode(newCode);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setInviteError(e instanceof Error ? e.message : String(e));
     } finally {
-      setLoading(false);
+      setInviteLoading(false);
     }
   }
 
   return (
     <Screen>
       <View className="flex-1 gap-6 py-4">
-        <View className="gap-2">
-          <Text className="text-lg font-semibold text-gray-900">Settings</Text>
+        <Text className="text-lg font-semibold text-gray-900">Settings</Text>
+
+        {/* Reset time */}
+        <View className="gap-3">
+          <Text className="text-base font-semibold text-gray-900">Daily reset time</Text>
           <Text className="text-sm text-gray-500">
-            Reset time & protocol selection — TODO (MI-17 / MI-18 / MI-19).
+            A new charting day begins at this time. Applies to both spouses.
           </Text>
+
+          {loading ? (
+            <ActivityIndicator />
+          ) : (
+            <View className="flex-row items-center justify-between rounded-2xl bg-gray-100 px-4 py-3">
+              <Text className="text-2xl font-bold text-gray-900">
+                {formatResetTime(settings?.resetTime ?? "04:00:00")}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Change reset time"
+                onPress={openPicker}
+                className="rounded-xl bg-blue-600 px-4 py-2 active:bg-blue-700"
+              >
+                <Text className="text-sm font-semibold text-white">Change</Text>
+              </Pressable>
+            </View>
+          )}
+
+          {settingsError ? (
+            <Text accessibilityRole="alert" className="text-sm text-red-600">
+              {settingsError}
+            </Text>
+          ) : null}
         </View>
 
+        {/* Invite spouse */}
         <View className="gap-2">
           <Text className="text-base font-semibold text-gray-900">Invite your spouse</Text>
           <Text className="text-sm text-gray-500">
-            Generate a single-use code (valid 7 days). Your spouse enters it on the “Join
-            household” screen to link their own login to this household.
+            Generate a single-use code (valid 7 days). Your spouse enters it on the "Join
+            household" screen to link their own login to this household.
           </Text>
 
           {code ? (
@@ -64,22 +116,22 @@ export default function SettingsScreen() {
             </View>
           ) : null}
 
-          {error ? (
+          {inviteError ? (
             <Text accessibilityRole="alert" className="text-sm text-red-600">
-              {error}
+              {inviteError}
             </Text>
           ) : null}
 
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Generate invite code"
-            disabled={loading}
+            disabled={inviteLoading}
             onPress={onInvite}
             className={`min-h-12 items-center justify-center rounded-2xl px-4 py-3 ${
-              loading ? "bg-gray-300" : "bg-blue-600 active:bg-blue-700"
+              inviteLoading ? "bg-gray-300" : "bg-blue-600 active:bg-blue-700"
             }`}
           >
-            {loading ? (
+            {inviteLoading ? (
               <ActivityIndicator color="#ffffff" />
             ) : (
               <Text className="text-base font-semibold text-white">
@@ -98,6 +150,96 @@ export default function SettingsScreen() {
           <Text className="text-base font-semibold text-red-600">Sign out</Text>
         </Pressable>
       </View>
+
+      {/* Reset-time picker modal */}
+      <Modal visible={pickerVisible} transparent animationType="fade">
+        <View className="flex-1 items-center justify-center bg-black/40">
+          <View className="w-80 gap-6 rounded-3xl bg-white px-6 py-8">
+            <Text className="text-center text-lg font-semibold text-gray-900">
+              Set daily reset time
+            </Text>
+
+            <View className="flex-row items-center justify-center gap-4">
+              {/* Hour */}
+              <View className="items-center gap-2">
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Increase hour"
+                  onPress={() => setPickerHour((h) => (h + 1) % 24)}
+                  className="h-10 w-10 items-center justify-center rounded-full bg-gray-100 active:bg-gray-200"
+                >
+                  <Text className="text-xl font-bold text-gray-700">+</Text>
+                </Pressable>
+                <Text className="w-12 text-center text-3xl font-bold text-gray-900">
+                  {String(pickerHour).padStart(2, "0")}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Decrease hour"
+                  onPress={() => setPickerHour((h) => (h - 1 + 24) % 24)}
+                  className="h-10 w-10 items-center justify-center rounded-full bg-gray-100 active:bg-gray-200"
+                >
+                  <Text className="text-xl font-bold text-gray-700">−</Text>
+                </Pressable>
+                <Text className="text-xs text-gray-400">hour</Text>
+              </View>
+
+              <Text className="text-3xl font-bold text-gray-300">:</Text>
+
+              {/* Minute (steps of 5) */}
+              <View className="items-center gap-2">
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Increase minute"
+                  onPress={() => setPickerMinute((m) => (m + 5) % 60)}
+                  className="h-10 w-10 items-center justify-center rounded-full bg-gray-100 active:bg-gray-200"
+                >
+                  <Text className="text-xl font-bold text-gray-700">+</Text>
+                </Pressable>
+                <Text className="w-12 text-center text-3xl font-bold text-gray-900">
+                  {String(pickerMinute).padStart(2, "0")}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Decrease minute"
+                  onPress={() => setPickerMinute((m) => (m - 5 + 60) % 60)}
+                  className="h-10 w-10 items-center justify-center rounded-full bg-gray-100 active:bg-gray-200"
+                >
+                  <Text className="text-xl font-bold text-gray-700">−</Text>
+                </Pressable>
+                <Text className="text-xs text-gray-400">min (×5)</Text>
+              </View>
+            </View>
+
+            <View className="flex-row gap-3">
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Cancel"
+                onPress={() => setPickerVisible(false)}
+                className="min-h-12 flex-1 items-center justify-center rounded-2xl border border-gray-300 px-4 py-3 active:bg-gray-100"
+              >
+                <Text className="text-base font-semibold text-gray-700">Cancel</Text>
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Save reset time"
+                disabled={saving}
+                onPress={onSaveResetTime}
+                className={`min-h-12 flex-1 items-center justify-center rounded-2xl px-4 py-3 ${
+                  saving ? "bg-gray-300" : "bg-blue-600 active:bg-blue-700"
+                }`}
+              >
+                {saving ? (
+                  <ActivityIndicator color="#ffffff" />
+                ) : (
+                  <Text className="text-base font-semibold text-white">Save</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }
