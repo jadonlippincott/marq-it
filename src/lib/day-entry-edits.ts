@@ -1,4 +1,4 @@
-import { chartDateFor } from "@/lib/chart-date";
+import { chartDateFor, zonedNoonToUtc } from "@/lib/chart-date";
 import type { Reading } from "@/lib/chart-data";
 import { supabase } from "@/lib/supabase";
 
@@ -14,12 +14,6 @@ import { supabase } from "@/lib/supabase";
  * last-write-wins for now (Realtime reconciliation is MI-24).
  */
 export type EditResult = { ok: boolean; error: string | null };
-
-/** Midday-UTC instant for a chart date, so an inserted event buckets into that
- * day for a typical morning reset. Far-flung timezones are hardened in MI-25. */
-function noonUtcFor(chartDate: string): string {
-  return `${chartDate}T12:00:00.000Z`;
-}
 
 /** Set (or change) the reading for a day. Upsert preserves recorded_by on update. */
 export async function setReading(
@@ -47,16 +41,20 @@ export async function clearReading(householdId: string, chartDate: string): Prom
   return error ? { ok: false, error: error.message } : { ok: true, error: null };
 }
 
-/** Add one intercourse event to a day (placed inside that chart day). */
+/**
+ * Add one intercourse event to a day, placed at midday in the household timezone
+ * so it buckets into the target chart day regardless of timezone (MI-25).
+ */
 export async function incrementIntercourse(
   householdId: string,
   chartDate: string,
   memberId: string,
+  timeZone: string,
 ): Promise<EditResult> {
   const { error } = await supabase.from("intercourse_events").insert({
     household_id: householdId,
     recorded_by: memberId,
-    occurred_at: noonUtcFor(chartDate),
+    occurred_at: zonedNoonToUtc(chartDate, timeZone),
   });
   return error ? { ok: false, error: error.message } : { ok: true, error: null };
 }

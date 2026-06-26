@@ -129,7 +129,9 @@ function ChartContent({
         }
         onClearReading={() => runEdit(() => clearReading(edit.householdId, editingDate!))}
         onIncrement={() =>
-          runEdit(() => incrementIntercourse(edit.householdId, editingDate!, edit.memberId))
+          runEdit(() =>
+            incrementIntercourse(edit.householdId, editingDate!, edit.memberId, edit.timeZone),
+          )
         }
         onDecrement={() =>
           runEdit(() =>

@@ -1,12 +1,18 @@
 /**
- * Reset-adjusted charting date (MI-15, schema decision from MI-9).
+ * Reset-adjusted charting day logic (MI-15, schema decision from MI-9; timezone
+ * & DST hardening in MI-25).
  *
- * A "charting day" runs from the household's reset time to the next reset time
- * (e.g. 4:00 AM). A reading taken before the reset belongs to the *previous*
- * calendar day. This returns the chart date as a `YYYY-MM-DD` string computed in
- * the household's timezone — used both to query today's entry and to record it.
+ * The charting day is always computed in the **household's** timezone
+ * (`settings.timezone`), never each device's local time. That single fixed zone
+ * is what makes both spouses agree on "today" even when they're physically in
+ * different timezones or travelling — and it's why timestamps are stored in UTC
+ * and converted on read. `Intl` gives DST-aware wall-clock time in the zone, and
+ * the day arithmetic below is calendar-date-only, so DST transitions never skip
+ * or duplicate a chart day.
  */
-export function chartDateFor(now: Date, resetTime: string, timeZone: string): string {
+
+/** Wall-clock fields (numeric) that `now` shows in `timeZone`, DST-aware. */
+function wallClockInTimeZone(now: Date, timeZone: string) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone,
     year: "numeric",
@@ -19,14 +25,20 @@ export function chartDateFor(now: Date, resetTime: string, timeZone: string): st
   }).formatToParts(now);
 
   const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? "0");
-  let year = get("year");
-  let month = get("month");
-  let day = get("day");
   let hour = get("hour");
   // Some engines emit "24" for midnight under hour12:false; normalize to 0.
   if (hour === 24) hour = 0;
+  return { year: get("year"), month: get("month"), day: get("day"), hour, minute: get("minute"), second: get("second") };
+}
 
-  const secondsOfDay = hour * 3600 + get("minute") * 60 + get("second");
+/**
+ * The charting date (`YYYY-MM-DD`) that `now` falls in, in the household zone.
+ * A moment before the reset time belongs to the previous charting day.
+ */
+export function chartDateFor(now: Date, resetTime: string, timeZone: string): string {
+  const wall = wallClockInTimeZone(now, timeZone);
+  let { year, month, day } = wall;
+  const secondsOfDay = wall.hour * 3600 + wall.minute * 60 + wall.second;
 
   if (secondsOfDay < parseTimeToSeconds(resetTime)) {
     // Before today's reset → still the previous charting day.
@@ -38,6 +50,25 @@ export function chartDateFor(now: Date, resetTime: string, timeZone: string): st
   }
 
   return `${pad(year, 4)}-${pad(month, 2)}-${pad(day, 2)}`;
+}
+
+/**
+ * UTC instant for **midday in `timeZone`** on `chartDate` (`YYYY-MM-DD`), as an
+ * ISO string. Used to place an edit-added intercourse event (MI-23) solidly
+ * inside its target charting day for any timezone — midday is far from any reset
+ * boundary, so `chartDateFor` always buckets the event back to `chartDate`.
+ *
+ * Computed with a single offset correction: interpret noon as if it were UTC,
+ * see what wall-clock that instant shows in the zone, and shift by the gap. Noon
+ * is never inside a DST gap/overlap, so the wall time is unambiguous.
+ */
+export function zonedNoonToUtc(chartDate: string, timeZone: string): string {
+  const [y, mo, d] = chartDate.split("-").map(Number);
+  const noonAsUtc = Date.UTC(y, mo - 1, d, 12, 0, 0);
+  const seen = wallClockInTimeZone(new Date(noonAsUtc), timeZone);
+  const seenAsUtc = Date.UTC(seen.year, seen.month - 1, seen.day, seen.hour, seen.minute, seen.second);
+  const offset = seenAsUtc - noonAsUtc; // how far the zone is ahead of UTC
+  return new Date(noonAsUtc - offset).toISOString();
 }
 
 function parseTimeToSeconds(time: string): number {

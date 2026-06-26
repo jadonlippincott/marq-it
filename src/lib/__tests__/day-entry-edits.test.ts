@@ -1,3 +1,4 @@
+import { chartDateFor } from "@/lib/chart-date";
 import {
   clearReading,
   decrementIntercourse,
@@ -49,18 +50,29 @@ describe("clearReading", () => {
 });
 
 describe("incrementIntercourse", () => {
-  it("inserts an event placed at noon UTC of the target chart day", async () => {
+  it("inserts an event placed at midday in the household timezone", async () => {
     const insert = jest.fn().mockResolvedValue({ error: null });
     mockFrom.mockReturnValue({ insert });
 
-    const result = await incrementIntercourse("hh-1", "2024-06-08", "m-1");
+    const result = await incrementIntercourse("hh-1", "2024-06-08", "m-1", "America/New_York");
 
     expect(result).toEqual({ ok: true, error: null });
+    // Noon EDT (UTC-4) on 2024-06-08 = 16:00Z.
     expect(insert).toHaveBeenCalledWith({
       household_id: "hh-1",
       recorded_by: "m-1",
-      occurred_at: "2024-06-08T12:00:00.000Z",
+      occurred_at: "2024-06-08T16:00:00.000Z",
     });
+  });
+
+  it("places the event so it buckets back to the same day even in a far-west zone", async () => {
+    const insert = jest.fn().mockResolvedValue({ error: null });
+    mockFrom.mockReturnValue({ insert });
+
+    await incrementIntercourse("hh-1", "2024-06-08", "m-1", "Pacific/Pago_Pago"); // UTC-11
+    const occurredAt = insert.mock.calls[0][0].occurred_at as string;
+    // The naive noon-UTC hack would have mis-bucketed this to the previous day.
+    expect(chartDateFor(new Date(occurredAt), "04:00:00", "Pacific/Pago_Pago")).toBe("2024-06-08");
   });
 });
 
