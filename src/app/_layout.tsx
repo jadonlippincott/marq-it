@@ -24,6 +24,7 @@ export default function RootLayout() {
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="(app)" />
             <Stack.Screen name="(auth)" />
+            <Stack.Screen name="reset-password" options={{ headerShown: true, title: "Set New Password" }} />
           </Stack>
         </AuthProvider>
       </SafeAreaProvider>
