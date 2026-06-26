@@ -42,3 +42,16 @@ export async function saveResetTime(
     );
   return { error: error?.message ?? null };
 }
+
+export async function saveProtocol(
+  householdId: string,
+  protocol: Protocol,
+): Promise<{ error: string | null }> {
+  const { error } = await supabase
+    .from("settings")
+    .upsert(
+      { household_id: householdId, protocol, updated_at: new Date().toISOString() },
+      { onConflict: "household_id" },
+    );
+  return { error: error?.message ?? null };
+}

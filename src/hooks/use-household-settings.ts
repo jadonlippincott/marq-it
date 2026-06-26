@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { useAuth } from "@/lib/auth";
-import { type HouseholdSettings, loadSettings, saveResetTime } from "@/lib/settings";
+import type { Protocol } from "@/lib/chart-data";
+import { type HouseholdSettings, loadSettings, saveProtocol, saveResetTime } from "@/lib/settings";
 import { supabase } from "@/lib/supabase";
 
 /**
@@ -84,5 +85,21 @@ export function useHouseholdSettings() {
     [settings?.householdId, refresh],
   );
 
-  return { loading, saving, error, settings, updateResetTime };
+  const updateProtocol = useCallback(
+    async (newProtocol: Protocol) => {
+      if (!settings?.householdId) return;
+      setError(null);
+      setSaving(true);
+      const { error: saveError } = await saveProtocol(settings.householdId, newProtocol);
+      if (saveError) {
+        setError(saveError);
+      } else {
+        await refresh();
+      }
+      setSaving(false);
+    },
+    [settings?.householdId, refresh],
+  );
+
+  return { loading, saving, error, settings, updateResetTime, updateProtocol };
 }
