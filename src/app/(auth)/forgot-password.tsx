@@ -13,36 +13,55 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Screen } from "@/components/screen";
-import { signIn } from "@/lib/signin";
+import { requestPasswordReset } from "@/lib/reset-password";
 
 /**
- * Sign In (MI-13). Email + password → Supabase. On success the auth gate
- * redirects into the app automatically (session change), so no manual nav.
+ * Forgot Password screen (MI-28). Accepts an email address and triggers the
+ * Supabase password-reset email. On success, shows a "check your inbox" state
+ * rather than navigating away, so the user sees confirmation.
  */
-export default function SignInScreen() {
+export default function ForgotPasswordScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = insets.top + 44;
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [sent, setSent] = useState(false);
 
-  const canSubmit = email.trim().length > 0 && password.length > 0 && !submitting;
+  const canSubmit = email.trim().length > 0 && !submitting;
 
   async function onSubmit() {
     setError(null);
     setSubmitting(true);
     try {
-      const { error: submitError } = await signIn({ email, password });
+      const { error: submitError } = await requestPasswordReset(email);
       if (submitError) {
         setError(submitError);
+      } else {
+        setSent(true);
       }
-      // On success the gate navigates; leave submitting until unmount.
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (sent) {
+    return (
+      <Screen>
+        <View className="flex-1 items-center justify-center gap-4">
+          <Text className="text-center text-2xl font-bold text-gray-900">Check your inbox</Text>
+          <Text className="text-center text-base text-gray-600">
+            We sent a password reset link to {email.trim()}. Tap the link in the email to set a new
+            password.
+          </Text>
+          <Link href="/(auth)/sign-in" className="text-center text-base text-blue-600">
+            Back to sign in
+          </Link>
+        </View>
+      </Screen>
+    );
   }
 
   return (
@@ -57,7 +76,10 @@ export default function SignInScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Text className="text-center text-2xl font-bold text-gray-900">Welcome back</Text>
+          <Text className="text-center text-2xl font-bold text-gray-900">Forgot password?</Text>
+          <Text className="text-center text-base text-gray-600">
+            Enter your email and we&apos;ll send a reset link.
+          </Text>
 
           <View className="gap-1">
             <Text className="text-sm font-medium text-gray-700">Email</Text>
@@ -74,19 +96,6 @@ export default function SignInScreen() {
             />
           </View>
 
-          <View className="gap-1">
-            <Text className="text-sm font-medium text-gray-700">Password</Text>
-            <TextInput
-              accessibilityLabel="Password"
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Your password"
-              secureTextEntry
-              autoCapitalize="none"
-              className="rounded-xl border border-gray-300 px-4 py-3 text-base text-gray-900"
-            />
-          </View>
-
           {error ? (
             <Text accessibilityRole="alert" className="text-center text-sm text-red-600">
               {error}
@@ -95,7 +104,7 @@ export default function SignInScreen() {
 
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Sign in"
+            accessibilityLabel="Send reset email"
             accessibilityState={{ disabled: !canSubmit }}
             disabled={!canSubmit}
             onPress={onSubmit}
@@ -106,19 +115,12 @@ export default function SignInScreen() {
             {submitting ? (
               <ActivityIndicator color="#ffffff" />
             ) : (
-              <Text className="text-base font-semibold text-white">Sign in</Text>
+              <Text className="text-base font-semibold text-white">Send reset email</Text>
             )}
           </Pressable>
 
-          <Link href="/(auth)/forgot-password" className="text-center text-base text-blue-600">
-            Forgot password?
-          </Link>
-
-          <Link href="/(auth)/sign-up" className="text-center text-base text-blue-600">
-            Create an account →
-          </Link>
-          <Link href="/(auth)/join" className="text-center text-base text-blue-600">
-            Join your spouse&apos;s household →
+          <Link href="/(auth)/sign-in" className="text-center text-base text-blue-600">
+            Back to sign in
           </Link>
         </ScrollView>
       </KeyboardAvoidingView>
