@@ -61,16 +61,21 @@ jobs:
       # Per-project instruction preamble curated in TireTrack project settings.
       # Empty on the manual workflow_dispatch path → the step uses a minimal one.
       PROMPT_INSTRUCTIONS: ${{ github.event.client_payload.prompt_instructions }}
+      # Per-run/per-project settings are nested under client_payload.config
+      # (the backend bundles them there to stay under GitHub's 10-key
+      # client_payload cap). All are absent on the manual workflow_dispatch path.
       # Per-project toggle: 'true' runs Claude with --dangerously-skip-permissions.
-      SKIP_PERMISSIONS: ${{ github.event.client_payload.skip_permissions }}
+      SKIP_PERMISSIONS: ${{ github.event.client_payload.config.skip_permissions }}
+      # Per-project toggle: 'true' opens the PR ready for review instead of a draft.
+      PR_READY_FOR_REVIEW: ${{ github.event.client_payload.config.pr_ready_for_review }}
       # Deploy environment of the firing backend (dev/prod) — selects the
       # matching TireTrack MCP build (dev pre-release vs stable).
       ENVIRONMENT: ${{ github.event.client_payload.environment }}
       # TT-228: project + target column for self-filed out-of-scope findings.
       # Present only on the auto-dispatch path; absent on manual workflow_dispatch
       # (the self-file instructions are then omitted).
-      PROJECT_ID: ${{ github.event.client_payload.project_id }}
-      FINDINGS_STATUS: ${{ github.event.client_payload.findings_status }}
+      PROJECT_ID: ${{ github.event.client_payload.config.project_id }}
+      FINDINGS_STATUS: ${{ github.event.client_payload.config.findings_status }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -166,6 +171,17 @@ jobs:
           # there. All values are treated as data and expanded quoted, never eval'd.
           INSTRUCTIONS="${PROMPT_INSTRUCTIONS:-Implement the change described in the ticket below, then commit your work on the current branch.}"
 
+          # Per-project PR mode. Default is a draft; the project can opt into
+          # opening the PR ready for review. These are our own (trusted) values,
+          # interpolated into the prompt as guidance for Claude's gh invocation.
+          if [ "${PR_READY_FOR_REVIEW:-}" = "true" ]; then
+            DRAFT_FLAG=""
+            PR_KIND="pull request (ready for review)"
+          else
+            DRAFT_FLAG="--draft "
+            PR_KIND="DRAFT pull request"
+          fi
+
           # The ticket block AND the push/PR contract are always appended here,
           # never curated away, so a custom project prompt can't drop the ticket
           # context or the steps that get the work onto a PR. ${TICKET_*} are
@@ -181,9 +197,28 @@ jobs:
           When you have finished implementing AND you made code changes, open a PR:
           1. Commit your work on the current branch.
           2. Push the current branch: git push -u origin HEAD
-          3. Open a DRAFT pull request against main with the gh CLI, for example:
-             gh pr create --draft --base main --title \"[${TICKET_KEY}] ${TICKET_TITLE} (Claude draft)\" --body \"Automated draft for ${TICKET_KEY} by Claude Code. Ticket: ${TICKET_URL} — review before merging; Claude never pushes to main.\"
+          3. Open a ${PR_KIND} against main with the gh CLI, for example:
+             gh pr create ${DRAFT_FLAG}--base main --title \"[${TICKET_KEY}] ${TICKET_TITLE} (Claude draft)\" --body \"Automated draft for ${TICKET_KEY} by Claude Code. Ticket: ${TICKET_URL} — review before merging; Claude never pushes to main.\"
           If you produced no code changes, do not commit, push, or open a PR."
+
+          # TT-228: when the run came from the backend (PROJECT_ID present), allow
+          # Claude to self-file OUT-OF-SCOPE findings via the TireTrack MCP. This
+          # section is appended by us (never curated away) so the high bar travels
+          # with the run. ${PROJECT_ID}/${FINDINGS_STATUS} are our values; the MCP
+          # authenticates as the Claude bot, so a created ticket's reporter is the
+          # bot automatically and it lands unassigned in the findings column.
+          if [ -n "${PROJECT_ID:-}" ]; then
+            PROMPT="${PROMPT}
+
+          Filing out-of-scope findings (optional — only when warranted):
+          While working this ticket you may discover a SEPARATE problem that clearly should be fixed but does NOT belong in this ticket's change. If — and only if — a finding (a) should DEFINITELY be addressed and (b) is genuinely out of scope of ${TICKET_KEY}, file ONE new TireTrack ticket for it via the TireTrack MCP create_issue tool with:
+            - project_id: \"${PROJECT_ID}\"
+            - status: \"${FINDINGS_STATUS:-new}\"
+            - a clear, specific title
+            - a description in Current / Desired / Dev Notes format
+            - no assignee
+          Do NOT file speculative ideas, nice-to-haves, stylistic preferences, or anything you could reasonably fix within this ticket's scope. When in doubt, do not file. After creating it, link it to ${TICKET_KEY} as a related ticket and add a brief comment on ${TICKET_KEY} noting the new ticket key. The new ticket is authored by Claude and a human reviews it before any work begins."
+          fi
 
           # Permission mode is per-project. The scoped allowlist is the default;
           # skip-permissions is opt-in (the runner is sandboxed CI).
